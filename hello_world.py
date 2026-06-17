@@ -1,5 +1,8 @@
 """
-CS 898BA - Homework 1 - Initial commit script.
+CS 898BA - Homework 1
+Initial commit verification script.
 """
 
-print("Hello World!")
+if __name__ == "__main__":
+    greeting = "Hello World!"
+    print(greeting)

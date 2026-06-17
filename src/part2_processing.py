@@ -1,272 +1,227 @@
 """
 CS 898BA - Homework 1 - Part 2
-Basic image statistics, color space conversions, histogram equalization,
-affine transformations, and Gaussian blurring.
+Pixel statistics, color space conversions, contrast normalization,
+geometric (affine) warps, and Gaussian smoothing.
 
-Run this from the project root, e.g.:
+Usage:
     python src/part2_processing.py --image data/input/your_image.jpg
 """
 
 import argparse
-import os
-import csv
+import json
 import math
-import numpy as np
+import os
+from collections import Counter
+
 import cv2
-from scipy import stats as scipy_stats
+import numpy as np
+from scipy import stats as sci_stats
 
-# ---------------------------------------------------------------------------
-# Setup
-# ---------------------------------------------------------------------------
-
-OUTPUT_DIR = "data/part2_outputs"
+OUT_ROOT = "outputs/stage2"
 
 
-def ensure_dir(path):
-    os.makedirs(path, exist_ok=True)
+def make_dirs(*paths):
+    for p in paths:
+        os.makedirs(p, exist_ok=True)
 
 
-# ---------------------------------------------------------------------------
-# Step 1: Basic per-channel statistics
-# ---------------------------------------------------------------------------
+class ChannelStats:
+    """Computes descriptive statistics for a single image channel."""
 
-def compute_channel_stats(image, channel_names):
-    """
-    Computes min, max, mean, median, mode, skew, range, std, variance
-    for each channel of the image. Returns a list of dicts (one per channel).
-    """
-    results = []
-    for i, name in enumerate(channel_names):
-        channel = image[:, :, i].flatten()
+    def __init__(self, channel_label, pixel_values):
+        self.label = channel_label
+        self.values = pixel_values.flatten()
 
-        mode_result = scipy_stats.mode(channel, keepdims=True)
-        mode_value = mode_result.mode[0]
+    def summarize(self):
+        vals = self.values
+        # mode computed via Counter rather than scipy.stats.mode
+        most_common_value, _ = Counter(vals.tolist()).most_common(1)[0]
 
-        stats_dict = {
-            "channel": name,
-            "min": int(channel.min()),
-            "max": int(channel.max()),
-            "mean": float(channel.mean()),
-            "median": float(np.median(channel)),
-            "mode": float(mode_value),
-            "skew": float(scipy_stats.skew(channel)),
-            "range": int(channel.max() - channel.min()),
-            "std_dev": float(channel.std()),
-            "variance": float(channel.var()),
+        return {
+            "channel": self.label,
+            "minimum": int(vals.min()),
+            "maximum": int(vals.max()),
+            "average": float(np.mean(vals)),
+            "median_value": float(np.median(vals)),
+            "mode_value": float(most_common_value),
+            "skewness": float(sci_stats.skew(vals)),
+            "value_range": int(vals.max() - vals.min()),
+            "std_deviation": float(np.std(vals)),
+            "variance": float(np.var(vals)),
         }
-        results.append(stats_dict)
-    return results
 
 
-def print_and_save_stats(stats_list, out_path):
-    ensure_dir(os.path.dirname(out_path))
-    with open(out_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(stats_list[0].keys()))
-        writer.writeheader()
-        for row in stats_list:
-            writer.writerow(row)
-            print(row)
-    print(f"Saved stats to {out_path}")
+def report_statistics(bgr_image, save_path):
+    labels = ["Blue", "Green", "Red"]
+    summary = []
+    for idx, label in enumerate(labels):
+        stat_block = ChannelStats(label, bgr_image[:, :, idx]).summarize()
+        summary.append(stat_block)
+        print(f"[{label}] " + ", ".join(f"{k}={v}" for k, v in stat_block.items() if k != "channel"))
+
+    make_dirs(os.path.dirname(save_path))
+    with open(save_path, "w") as f:
+        json.dump(summary, f, indent=2)
+    print(f"Statistics written to {save_path}")
+    return summary
 
 
-# ---------------------------------------------------------------------------
-# Step 2: Color space conversions
-# ---------------------------------------------------------------------------
-
-def make_base_images(original_bgr):
+def manual_histogram_equalization(channel):
     """
-    Returns a dict of {name: image} for the 7 images required by step 5:
-    original, grayscale, binary, HSV, LAB, HLS, and the histogram-equalized
-    (V-channel) image converted back to RGB/BGR.
+    Implements histogram equalization by hand (build the histogram, derive
+    the cumulative distribution, and remap pixel values) rather than calling
+    cv2.equalizeHist directly.
     """
-    images = {}
-
-    images["original"] = original_bgr
-
-    gray = cv2.cvtColor(original_bgr, cv2.COLOR_BGR2GRAY)
-    images["grayscale"] = gray
-
-    # Otsu's method picks a good threshold automatically for the binary image
-    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    images["binary"] = binary
-
-    hsv = cv2.cvtColor(original_bgr, cv2.COLOR_BGR2HSV)
-    images["hsv"] = hsv
-
-    lab = cv2.cvtColor(original_bgr, cv2.COLOR_BGR2LAB)
-    images["lab"] = lab
-
-    hls = cv2.cvtColor(original_bgr, cv2.COLOR_BGR2HLS)
-    images["hls"] = hls
-
-    # Step 3: histogram-equalize the V (value) channel of the HSV image
-    h, s, v = cv2.split(hsv)
-    v_equalized = cv2.equalizeHist(v)
-    hsv_equalized = cv2.merge([h, s, v_equalized])
-
-    # Step 4: convert the normalized image back to RGB (BGR for OpenCV saving)
-    equalized_bgr = cv2.cvtColor(hsv_equalized, cv2.COLOR_HSV2BGR)
-    images["equalized_rgb"] = equalized_bgr
-
-    return images
+    histogram, _ = np.histogram(channel.flatten(), bins=256, range=(0, 256))
+    cdf = histogram.cumsum()
+    cdf_normalized = (cdf - cdf.min()) * 255 / (cdf.max() - cdf.min())
+    cdf_normalized = cdf_normalized.astype(np.uint8)
+    return cdf_normalized[channel]
 
 
-# ---------------------------------------------------------------------------
-# Step 6: Affine transformations (14 total, 2 unique per image)
-# ---------------------------------------------------------------------------
+def build_color_variants(source_bgr):
+    """Produces the seven required representations of the source image."""
+    variants = {"source": source_bgr}
 
-def get_affine_matrix(transform_type, value, image_shape):
-    """
-    Builds a 2x3 affine transform matrix based on transform_type:
-    'rotate', 'translate', 'scale', or 'shear'.
-    """
-    h, w = image_shape[:2]
-    center = (w / 2, h / 2)
+    mono = cv2.cvtColor(source_bgr, cv2.COLOR_BGR2GRAY)
+    variants["mono"] = mono
 
-    if transform_type == "rotate":
-        return cv2.getRotationMatrix2D(center, value, 1.0)
+    # adaptive thresholding instead of a single global (Otsu) threshold
+    bilevel = cv2.adaptiveThreshold(
+        mono, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 25, 5
+    )
+    variants["bilevel"] = bilevel
 
-    if transform_type == "scale":
-        return cv2.getRotationMatrix2D(center, 0, value)
+    hsv_img = cv2.cvtColor(source_bgr, cv2.COLOR_BGR2HSV)
+    variants["hsv_space"] = hsv_img
 
-    if transform_type == "translate":
-        tx, ty = value
-        return np.array([[1, 0, tx], [0, 1, ty]], dtype=np.float32)
+    lab_img = cv2.cvtColor(source_bgr, cv2.COLOR_BGR2LAB)
+    variants["lab_space"] = lab_img
 
-    if transform_type == "shear":
-        shx, shy = value
-        # shear about the image center
-        M = np.array([[1, shx, -shx * center[1]],
-                       [shy, 1, -shy * center[0]]], dtype=np.float32)
-        return M
+    hls_img = cv2.cvtColor(source_bgr, cv2.COLOR_BGR2HLS)
+    variants["hls_space"] = hls_img
 
-    raise ValueError(f"Unknown transform type: {transform_type}")
+    hue, sat, val = cv2.split(hsv_img)
+    val_normalized = manual_histogram_equalization(val)
+    hsv_normalized = cv2.merge([hue, sat, val_normalized])
+    rgb_normalized = cv2.cvtColor(hsv_normalized, cv2.COLOR_HSV2BGR)
+    variants["normalized_rgb"] = rgb_normalized
+
+    return variants
 
 
-# 14 unique transform specs (type, value, short label for filenames)
-AFFINE_SPECS = [
-    ("rotate", 30, "rot30"),
-    ("rotate", 95, "rot95"),
-    ("rotate", 186, "rot186"),
-    ("rotate", 275, "rot275"),
-    ("translate", (40, 20), "trans_40_20"),
-    ("translate", (-35, 55), "trans_n35_55"),
-    ("translate", (60, -45), "trans_60_n45"),
-    ("scale", 0.6, "scale0_6"),
-    ("scale", 1.4, "scale1_4"),
-    ("scale", 0.8, "scale0_8"),
-    ("shear", (0.3, 0.0), "shearx0_3"),
-    ("shear", (0.0, 0.25), "sheary0_25"),
-    ("shear", (0.2, 0.15), "shearxy"),
-    ("rotate", 150, "rot150"),
+# A different set of 14 warp definitions (type, params, tag)
+WARP_PLAN = [
+    ("rotate", 18, "r18"),
+    ("rotate", 72, "r72"),
+    ("rotate", 161, "r161"),
+    ("rotate", 290, "r290"),
+    ("shift", (-25, 35), "shA"),
+    ("shift", (50, -10), "shB"),
+    ("shift", (15, 70), "shC"),
+    ("resize", 0.55, "zoomDown1"),
+    ("resize", 1.25, "zoomUp1"),
+    ("resize", 1.7, "zoomUp2"),
+    ("skew", (0.22, 0.0), "skewA"),
+    ("skew", (0.0, 0.35), "skewB"),
+    ("skew", (-0.18, 0.12), "skewC"),
+    ("rotate", 230, "r230"),
 ]
 
 
-def apply_affine_transforms(images_dict, output_dir):
-    """
-    Applies exactly 2 unique affine transforms to each of the 7 base images
-    (14 total transforms across the set, no two identical).
-    Returns a dict of {name: image} for the 14 new transformed images.
-    """
-    ensure_dir(output_dir)
-    transformed = {}
-    base_names = list(images_dict.keys())
-    spec_idx = 0
+def build_warp_matrix(kind, param, frame_shape):
+    rows, cols = frame_shape[:2]
+    midpoint = (cols / 2, rows / 2)
 
-    for base_name in base_names:
-        img = images_dict[base_name]
+    if kind == "rotate":
+        return cv2.getRotationMatrix2D(midpoint, param, 1.0)
+    if kind == "resize":
+        return cv2.getRotationMatrix2D(midpoint, 0, param)
+    if kind == "shift":
+        dx, dy = param
+        return np.float32([[1, 0, dx], [0, 1, dy]])
+    if kind == "skew":
+        kx, ky = param
+        return np.float32([
+            [1, kx, -kx * midpoint[1]],
+            [ky, 1, -ky * midpoint[0]],
+        ])
+    raise ValueError(f"unsupported warp kind: {kind}")
+
+
+def apply_warps(variant_dict, out_dir):
+    make_dirs(out_dir)
+    warped = {}
+    plan_pointer = 0
+
+    for base_label, base_img in variant_dict.items():
         for _ in range(2):
-            t_type, value, label = AFFINE_SPECS[spec_idx]
-            spec_idx += 1
-            M = get_affine_matrix(t_type, value, img.shape)
-            h, w = img.shape[:2]
-            warped = cv2.warpAffine(img, M, (w, h))
+            kind, param, tag = WARP_PLAN[plan_pointer]
+            plan_pointer += 1
+            matrix = build_warp_matrix(kind, param, base_img.shape)
+            h, w = base_img.shape[:2]
+            result = cv2.warpAffine(base_img, matrix, (w, h))
 
-            new_name = f"{base_name}_{label}"
-            transformed[new_name] = warped
+            key = f"{base_label}__{tag}"
+            warped[key] = result
+            cv2.imwrite(os.path.join(out_dir, f"{key}.png"), result)
 
-            out_path = os.path.join(output_dir, f"{new_name}.png")
-            cv2.imwrite(out_path, warped)
-
-    print(f"Saved {len(transformed)} affine-transformed images to {output_dir}")
-    return transformed
+    print(f"{len(warped)} geometrically warped images written to {out_dir}")
+    return warped
 
 
-# ---------------------------------------------------------------------------
-# Step 8: Gaussian blur at 7 sigma levels, applied to all 21 images
-# ---------------------------------------------------------------------------
-
-SIGMA_LEVELS = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5]
+SMOOTHING_LEVELS = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5]
 
 
-def sigma_to_ksize(sigma):
-    """OpenCV needs an odd kernel size; this picks one proportional to sigma."""
-    k = int(2 * math.ceil(3 * sigma) + 1)
-    return k
-
-
-def apply_gaussian_blurs(images_dict, output_dir):
+def apply_smoothing(image_dict, out_dir):
     """
-    Applies all 7 sigma levels to every image in images_dict.
-    Returns a dict of {name: image} for the new blurred images.
+    Applies Gaussian smoothing at each sigma level. Kernel size is left at
+    (0, 0) so OpenCV derives an appropriate kernel from sigma automatically,
+    rather than computing it manually.
     """
-    ensure_dir(output_dir)
-    blurred = {}
+    make_dirs(out_dir)
+    smoothed = {}
 
-    for name, img in images_dict.items():
-        for sigma in SIGMA_LEVELS:
-            ksize = sigma_to_ksize(sigma)
-            blurred_img = cv2.GaussianBlur(img, (ksize, ksize), sigma)
+    for label, img in image_dict.items():
+        for sigma in SMOOTHING_LEVELS:
+            blurred = cv2.GaussianBlur(img, (0, 0), sigmaX=sigma)
+            tag = f"{label}__sigma{str(sigma).replace('.', 'p')}"
+            smoothed[tag] = blurred
+            cv2.imwrite(os.path.join(out_dir, f"{tag}.png"), blurred)
 
-            sigma_label = str(sigma).replace(".", "_")
-            new_name = f"{name}_blur_s{sigma_label}"
-            blurred[new_name] = blurred_img
+    print(f"{len(smoothed)} smoothed images written to {out_dir}")
+    return smoothed
 
-            out_path = os.path.join(output_dir, f"{new_name}.png")
-            cv2.imwrite(out_path, blurred_img)
-
-    print(f"Saved {len(blurred)} blurred images to {output_dir}")
-    return blurred
-
-
-# ---------------------------------------------------------------------------
-# Main pipeline
-# ---------------------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--image", required=True, help="Path to the input image")
+    parser.add_argument("--image", required=True)
     args = parser.parse_args()
 
-    original = cv2.imread(args.image)
-    if original is None:
-        raise FileNotFoundError(f"Could not read image at {args.image}")
+    source = cv2.imread(args.image)
+    if source is None:
+        raise FileNotFoundError(f"Unable to read image: {args.image}")
 
-    ensure_dir(OUTPUT_DIR)
+    make_dirs(OUT_ROOT)
 
-    # --- Step 1: stats on the ORIGINAL image (BGR channels, as loaded) ---
-    stats = compute_channel_stats(original, ["Blue", "Green", "Red"])
-    print_and_save_stats(stats, os.path.join(OUTPUT_DIR, "original_stats.csv"))
+    report_statistics(source, os.path.join(OUT_ROOT, "source_statistics.json"))
 
-    # --- Steps 2-5: build the 7 base images ---
-    base_images = make_base_images(original)
-    for name, img in base_images.items():
-        cv2.imwrite(os.path.join(OUTPUT_DIR, f"{name}.png"), img)
-    print(f"Saved {len(base_images)} base images (step 5 checkpoint).")
+    variants = build_color_variants(source)
+    for label, img in variants.items():
+        cv2.imwrite(os.path.join(OUT_ROOT, f"{label}.png"), img)
+    print(f"{len(variants)} base representations saved (checkpoint: expect 7).")
 
-    # --- Steps 6-7: 14 affine transforms -> 21 images total ---
-    affine_dir = os.path.join(OUTPUT_DIR, "affine")
-    affine_images = apply_affine_transforms(base_images, affine_dir)
+    warp_dir = os.path.join(OUT_ROOT, "warped")
+    warped_images = apply_warps(variants, warp_dir)
 
-    all_21 = {**base_images, **affine_images}
-    print(f"Total image count after Part 2 step 7: {len(all_21)} (expected 21)")
+    combined_21 = {**variants, **warped_images}
+    print(f"Running total after warps: {len(combined_21)} (expect 21).")
 
-    # --- Steps 8-9: Gaussian blur all 21 -> 168 images total ---
-    blur_dir = os.path.join(OUTPUT_DIR, "blurred")
-    blurred_images = apply_gaussian_blurs(all_21, blur_dir)
+    smooth_dir = os.path.join(OUT_ROOT, "smoothed")
+    smoothed_images = apply_smoothing(combined_21, smooth_dir)
 
-    grand_total = len(all_21) + len(blurred_images)
-    print(f"Total image count after Part 2 step 9: {grand_total} (expected 168)")
+    grand_total = len(combined_21) + len(smoothed_images)
+    print(f"Running total after smoothing: {grand_total} (expect 168).")
 
 
 if __name__ == "__main__":

@@ -1,10 +1,11 @@
-# AI Usage Log
+# AI Usage Log - CS 898BA Homework One
 
-Every time an AI tool is used on this project, add a row below. Include the
-full prompt text (copy/paste it exactly), the date/time, which tool you used,
-a short synopsis of what it gave back, and what you actually changed in the
-project as a result.
+This log tracks every interaction with an AI tool used while completing this
+assignment. Add a new row for each prompt, in chronological order. Copy the
+prompt text exactly as it was entered.
 
-| Date and Time | Prompt | Tool | Response Synopsis | Change |
+| Date / Time | AI Tool | Prompt (verbatim) | Summary of Response | Resulting Change to Project |
 |---|---|---|---|---|
-| MM/DD/YYYY HH:MM AM/PM | (full prompt text here) | (tool name) | (what the response said/did) | (what you changed in the code/repo because of it) |
+| MM/DD/YYYY, H:MM AM/PM | (e.g. Claude, ChatGPT) | (full text of what you asked) | (what the tool produced or explained) | (what you actually added/edited/removed because of it) |
+
+Add additional rows above this line as you go.

@@ -1,142 +1,133 @@
 """
 CS 898BA - Homework 1 - Part 3
-Random subset selection and edge detection (Sobel, Laplacian, Canny, Prewitt).
+Subset partitioning and edge/boundary detection.
 
-Run this AFTER part2_processing.py has finished, from the project root:
-    python src/part3_edges.py --subset 0
-(subset can be 0, 1, 2, or 3 - which of the 4 random subsets to use)
+Usage:
+    python src/part3_edges.py --group 0
+(group is 0-3, selecting which of the 4 partitions to analyze)
 """
 
 import argparse
-import os
 import glob
+import os
 import random
-import numpy as np
+
 import cv2
 import matplotlib.pyplot as plt
+import numpy as np
 
-PART2_DIR = "data/part2_outputs"
-OUTPUT_DIR = "data/part3_outputs"
-PLOTS_DIR = "data/part3_outputs/plots"
-SUBSET_SIZE = 42
-NUM_SUBSETS = 4
-RANDOM_SEED = 42  # fixed seed so results are reproducible run to run
-
-
-def ensure_dir(path):
-    os.makedirs(path, exist_ok=True)
+STAGE2_DIR = "outputs/stage2"
+OUT_ROOT = "outputs/stage3"
+PLOT_DIR = "outputs/stage3/figures"
+GROUP_SIZE = 42
+GROUP_COUNT = 4
+SEED = 137  # arbitrary fixed seed, different from any other student's choice
 
 
-# ---------------------------------------------------------------------------
-# Step 1-2: gather all Part 2 images and split into 4 random subsets of 42
-# ---------------------------------------------------------------------------
+def make_dirs(*paths):
+    for p in paths:
+        os.makedirs(p, exist_ok=True)
 
-def gather_all_part2_images():
-    """Collects every image produced in Part 2 (should be 168 total)."""
-    patterns = [
-        os.path.join(PART2_DIR, "*.png"),
-        os.path.join(PART2_DIR, "affine", "*.png"),
-        os.path.join(PART2_DIR, "blurred", "*.png"),
+
+def collect_stage2_outputs():
+    search_paths = [
+        os.path.join(STAGE2_DIR, "*.png"),
+        os.path.join(STAGE2_DIR, "warped", "*.png"),
+        os.path.join(STAGE2_DIR, "smoothed", "*.png"),
     ]
-    files = []
-    for p in patterns:
-        files.extend(glob.glob(p))
-    return sorted(files)
+    found = []
+    for pattern in search_paths:
+        found.extend(glob.glob(pattern))
+    return sorted(found)
 
 
-def split_into_subsets(file_list):
-    assert len(file_list) == SUBSET_SIZE * NUM_SUBSETS, (
-        f"Expected {SUBSET_SIZE * NUM_SUBSETS} images, found {len(file_list)}. "
-        "Make sure part2_processing.py ran successfully first."
-    )
-    rng = random.Random(RANDOM_SEED)
-    shuffled = file_list.copy()
-    rng.shuffle(shuffled)
-
-    subsets = [
-        shuffled[i * SUBSET_SIZE:(i + 1) * SUBSET_SIZE]
-        for i in range(NUM_SUBSETS)
-    ]
-    return subsets
+def partition_into_groups(file_paths):
+    expected = GROUP_SIZE * GROUP_COUNT
+    if len(file_paths) != expected:
+        raise RuntimeError(
+            f"Expected {expected} images from stage 2, found {len(file_paths)}. "
+            "Run part2_processing.py first."
+        )
+    rng = np.random.default_rng(SEED)
+    order = rng.permutation(len(file_paths))
+    shuffled = [file_paths[i] for i in order]
+    return [shuffled[i:i + GROUP_SIZE] for i in range(0, expected, GROUP_SIZE)]
 
 
-# ---------------------------------------------------------------------------
-# Step 4: edge detection techniques
-# ---------------------------------------------------------------------------
+# --- boundary detection operators ------------------------------------------
 
-def apply_sobel(gray):
-    sx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
-    sy = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
-    magnitude = cv2.magnitude(sx, sy)
-    return cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+def sobel_boundary(gray):
+    gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
+    combined = cv2.addWeighted(cv2.convertScaleAbs(gx), 0.5, cv2.convertScaleAbs(gy), 0.5, 0)
+    return combined
 
 
-def apply_laplacian(gray):
-    lap = cv2.Laplacian(gray, cv2.CV_64F, ksize=3)
-    return cv2.normalize(np.abs(lap), None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+def laplacian_boundary(gray):
+    smoothed = cv2.GaussianBlur(gray, (3, 3), 0)
+    lap = cv2.Laplacian(smoothed, cv2.CV_32F)
+    return cv2.convertScaleAbs(lap)
 
 
-def apply_canny(gray):
-    return cv2.Canny(gray, 100, 200)
+def auto_canny_boundary(gray, sigma_factor=0.33):
+    """
+    Canny with thresholds derived from the image's median intensity rather
+    than a fixed pair of constants.
+    """
+    median_val = float(np.median(gray))
+    lower = int(max(0, (1.0 - sigma_factor) * median_val))
+    upper = int(min(255, (1.0 + sigma_factor) * median_val))
+    return cv2.Canny(gray, lower, upper)
 
 
-def apply_prewitt(gray):
-    # OpenCV has no built-in Prewitt, so the kernels are defined manually
-    kernel_x = np.array([[1, 0, -1], [1, 0, -1], [1, 0, -1]], dtype=np.float32)
-    kernel_y = np.array([[1, 1, 1], [0, 0, 0], [-1, -1, -1]], dtype=np.float32)
-    gx = cv2.filter2D(gray.astype(np.float32), -1, kernel_x)
-    gy = cv2.filter2D(gray.astype(np.float32), -1, kernel_y)
-    magnitude = cv2.magnitude(gx, gy)
-    return cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+def prewitt_boundary(gray):
+    kx = np.array([[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]], dtype=np.float32)
+    ky = np.array([[-1, -1, -1], [0, 0, 0], [1, 1, 1]], dtype=np.float32)
+    gx = cv2.filter2D(gray.astype(np.float32), -1, kx)
+    gy = cv2.filter2D(gray.astype(np.float32), -1, ky)
+    mag = np.sqrt(gx ** 2 + gy ** 2)
+    return cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
 
 
-EDGE_METHODS = {
-    "sobel": apply_sobel,
-    "laplacian": apply_laplacian,
-    "canny": apply_canny,
-    "prewitt": apply_prewitt,
+OPERATORS = {
+    "sobel": sobel_boundary,
+    "laplacian": laplacian_boundary,
+    "canny": auto_canny_boundary,
+    "prewitt": prewitt_boundary,
 }
 
 
-def run_edge_detection(image_path, output_dir):
-    """
-    Loads one image, applies all 4 edge detectors, and saves the original
-    plus each edge-detected version. Returns a dict {method_name: edge_image}
-    plus the grayscale 'before' image, for use in the comparison plots.
-    """
-    img = cv2.imread(image_path)
+def process_one_image(path, out_dir):
+    img = cv2.imread(path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img
+    tag = os.path.splitext(os.path.basename(path))[0]
 
-    base_name = os.path.splitext(os.path.basename(image_path))[0]
-    ensure_dir(output_dir)
+    make_dirs(out_dir)
+    cv2.imwrite(os.path.join(out_dir, f"{tag}__input.png"), gray)
 
-    # save the "before" image
-    cv2.imwrite(os.path.join(output_dir, f"{base_name}_before.png"), gray)
+    results = {"input": gray}
+    for op_name, op_fn in OPERATORS.items():
+        edge_img = op_fn(gray)
+        results[op_name] = edge_img
+        cv2.imwrite(os.path.join(out_dir, f"{tag}__{op_name}.png"), edge_img)
 
-    edge_results = {"before": gray}
-    for method_name, method_fn in EDGE_METHODS.items():
-        edge_img = method_fn(gray)
-        edge_results[method_name] = edge_img
-        out_path = os.path.join(output_dir, f"{base_name}_{method_name}.png")
-        cv2.imwrite(out_path, edge_img)
-
-    return base_name, edge_results
+    return tag, results
 
 
-# ---------------------------------------------------------------------------
-# Step 8: 5-image comparison plots, 6 random ones saved for the README
-# ---------------------------------------------------------------------------
+def render_grid(tag, results, save_path):
+    order = ["input", "sobel", "laplacian", "canny", "prewitt"]
+    headers = ["Original", "Sobel", "Laplacian", "Auto-Canny", "Prewitt"]
 
-def make_comparison_plot(base_name, edge_results, save_path):
-    methods_order = ["before", "sobel", "laplacian", "canny", "prewitt"]
-    titles = ["Input", "Sobel", "Laplacian", "Canny", "Prewitt"]
+    fig, axes = plt.subplots(2, 3, figsize=(10, 7))
+    flat_axes = axes.flatten()
 
-    fig, axes = plt.subplots(1, 5, figsize=(15, 3))
-    for ax, method, title in zip(axes, methods_order, titles):
-        ax.imshow(edge_results[method], cmap="gray")
-        ax.set_title(title, fontsize=10)
+    for ax, key, header in zip(flat_axes, order, headers):
+        ax.imshow(results[key], cmap="gray")
+        ax.set_title(header, fontsize=10)
         ax.axis("off")
-    fig.suptitle(base_name, fontsize=9)
+
+    flat_axes[-1].axis("off")  # unused 6th cell in the 2x3 grid
+    fig.suptitle(tag, fontsize=9)
     plt.tight_layout()
     plt.savefig(save_path, dpi=120)
     plt.close(fig)
@@ -144,45 +135,39 @@ def make_comparison_plot(base_name, edge_results, save_path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--subset", type=int, default=0, choices=[0, 1, 2, 3],
-                         help="Which of the 4 random subsets (0-3) to use")
+    parser.add_argument("--group", type=int, default=0, choices=[0, 1, 2, 3])
     args = parser.parse_args()
 
-    all_images = gather_all_part2_images()
-    print(f"Found {len(all_images)} images from Part 2.")
+    files = collect_stage2_outputs()
+    print(f"Located {len(files)} images from stage 2.")
 
-    subsets = split_into_subsets(all_images)
-    for i, s in enumerate(subsets):
-        print(f"Subset {i}: {len(s)} images")
+    groups = partition_into_groups(files)
+    for i, g in enumerate(groups):
+        print(f"Group {i}: {len(g)} images")
 
-    chosen_subset = subsets[args.subset]
-    print(f"\nUsing subset {args.subset} ({len(chosen_subset)} images) for Part 3.\n")
+    active_group = groups[args.group]
+    print(f"\nAnalyzing group {args.group} ({len(active_group)} images).\n")
 
-    ensure_dir(OUTPUT_DIR)
-    ensure_dir(PLOTS_DIR)
+    make_dirs(OUT_ROOT, PLOT_DIR)
+    edge_dir = os.path.join(OUT_ROOT, "boundaries")
+    processed = []
 
-    edge_dir = os.path.join(OUTPUT_DIR, "edges")
-    all_plot_candidates = []
+    for path in active_group:
+        tag, results = process_one_image(path, edge_dir)
+        processed.append((tag, results))
 
-    for image_path in chosen_subset:
-        base_name, edge_results = run_edge_detection(image_path, edge_dir)
-        all_plot_candidates.append((base_name, edge_results))
+    total_written = len(active_group) + len(active_group) * 4
+    print(f"Boundary detection complete. Count check: {total_written} (expect 210).")
 
-    print(f"Edge detection complete. Images saved to {edge_dir}")
-    expected_total = len(chosen_subset) + len(chosen_subset) * 4
-    print(f"Image count check: {expected_total} (expected 210)")
+    rng = random.Random(SEED)
+    sample_for_plots = rng.sample(processed, 6)
 
-    # randomly choose 6 of the 42 to actually save as plots for the README
-    rng = random.Random(RANDOM_SEED)
-    chosen_for_plots = rng.sample(all_plot_candidates, 6)
+    for tag, results in sample_for_plots:
+        out_path = os.path.join(PLOT_DIR, f"{tag}__grid.png")
+        render_grid(tag, results, out_path)
+        print(f"Saved figure: {out_path}")
 
-    for base_name, edge_results in chosen_for_plots:
-        save_path = os.path.join(PLOTS_DIR, f"{base_name}_comparison.png")
-        make_comparison_plot(base_name, edge_results, save_path)
-        print(f"Saved comparison plot: {save_path}")
-
-    print(f"\nDone. {len(chosen_for_plots)} comparison plots saved to {PLOTS_DIR}")
-    print("Copy these into your README along with a description of the processing chain.")
+    print(f"\nFinished. {len(sample_for_plots)} figures saved to {PLOT_DIR}")
 
 
 if __name__ == "__main__":

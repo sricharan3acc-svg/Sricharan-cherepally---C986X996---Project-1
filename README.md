@@ -2,95 +2,94 @@
 
 **Author:** (your name)
 
-## Overview
+## What this project does
 
-This project applies basic image analysis and processing techniques to a
-single input image using Python and OpenCV: channel statistics, color space
-conversions, histogram equalization, affine transformations, Gaussian
-blurring, and edge detection (Sobel, Laplacian, Canny, Prewitt).
+Given one input image, this codebase runs a sequence of image analysis
+operations using Python and OpenCV: per-channel pixel statistics, color
+space conversions (HSV / LAB / HLS), contrast normalization via histogram
+equalization, geometric warps (rotation / translation / scaling / shear),
+Gaussian smoothing across several sigma levels, and four boundary/edge
+detection operators (Sobel, Laplacian, an auto-thresholded Canny, and a
+manually implemented Prewitt operator).
 
-## Setup
-
-1. Install Python 3.10+.
-2. Clone this repository and `cd` into it.
-3. Install dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-4. Place the input image in `data/input/` (this repo does not include the
-   original image; download it from the link provided in the assignment).
-
-## How to run
-
-Run Part 2 first (it generates the 168 images Part 3 depends on):
+## Getting set up
 
 ```
-python src/part2_processing.py --image data/input/YOUR_IMAGE_NAME.jpg
+pip install -r requirements.txt
 ```
 
-This creates `data/part2_outputs/`, containing:
-- `original_stats.csv` - per-channel statistics of the original image
-- 7 base images (original, grayscale, binary, HSV, LAB, HLS, equalized_rgb)
-- `affine/` - 14 affine-transformed versions of those 7 images
-- `blurred/` - 147 Gaussian-blurred versions (7 sigma levels x 21 images)
+Place your input image inside `data/input/`. The original assignment image
+is not checked into this repository - it must be downloaded separately from
+the link provided in the assignment instructions.
 
-Then run Part 3:
+## Running the pipeline
 
+Stage 2 (must run first):
 ```
-python src/part3_edges.py --subset 0
+python src/part2_processing.py --image data/input/YOUR_IMAGE.jpg
 ```
+Produces `outputs/stage2/`:
+- `source_statistics.json` - per-channel statistics for the original image
+- 7 base representations (source, mono, bilevel, hsv_space, lab_space, hls_space, normalized_rgb)
+- `warped/` - 14 geometrically transformed images
+- `smoothed/` - 147 Gaussian-smoothed images (7 sigma levels x 21 images)
 
-`--subset` can be 0, 1, 2, or 3 (the 4 random, equally-sized 42-image subsets
-of the 168 images from Part 2). This creates `data/part3_outputs/`, containing:
-- `edges/` - the "before" image and 4 edge-detected versions for each of the
-  42 images in the chosen subset (210 images total)
-- `plots/` - 6 randomly chosen 5-panel comparison plots (input + the 4 edge
-  outputs side by side)
+Stage 3:
+```
+python src/part3_edges.py --group 0
+```
+`--group` selects which of the 4 random 42-image partitions to analyze (0-3).
+Produces `outputs/stage3/`:
+- `boundaries/` - the grayscale input plus 4 boundary-detected versions for
+  each of the 42 images in the chosen group (210 images total)
+- `figures/` - 6 randomly selected comparison grids for inclusion below
 
-## Code explanation
+## Implementation notes
 
 `src/part2_processing.py`
-- `compute_channel_stats()` calculates min, max, mean, median, mode, skew,
-  range, standard deviation, and variance for each color channel.
-- `make_base_images()` produces the 7 required images, including histogram
-  equalizing the V channel of the HSV image and converting it back to RGB.
-- `apply_affine_transforms()` applies 14 unique rotation/translation/scale/
-  shear transforms (2 per base image, no two identical).
-- `apply_gaussian_blurs()` blurs every one of the 21 images at 7 sigma levels.
+- Statistics are computed per-channel (mode found via frequency counting
+  rather than a statistics library call) and saved as JSON.
+- The binary image uses adaptive (local) thresholding rather than a single
+  global threshold, so it responds to local contrast rather than one
+  whole-image cutoff.
+- Histogram equalization on the V channel is implemented manually (building
+  the histogram, computing the cumulative distribution, and remapping pixel
+  values), rather than calling a built-in equalization function.
+- Gaussian smoothing lets OpenCV derive the kernel size automatically from
+  each sigma value.
 
 `src/part3_edges.py`
-- Gathers all 168 images from Part 2, shuffles them with a fixed random seed
-  (for reproducibility), and splits them into 4 subsets of 42.
-- Runs Sobel, Laplacian, Canny, and Prewitt edge detection (Prewitt is
-  implemented manually with `cv2.filter2D` since OpenCV has no built-in
-  version) on the chosen subset.
-- Builds 5-panel comparison plots and saves 6 random ones for this README.
+- Partitioning uses a NumPy random permutation with a fixed seed, so the
+  4 groups are reproducible from run to run.
+- The Canny step automatically derives its lower/upper thresholds from the
+  image's median intensity instead of using fixed constants.
+- Prewitt is implemented from scratch with manual convolution kernels, since
+  OpenCV doesn't provide one natively.
 
 ## Results
 
 ### Original image statistics
 
-(Paste the contents of `data/part2_outputs/original_stats.csv` here, or a
-formatted table of it, once you've run the script on your real image.)
+(Paste the contents of `outputs/stage2/source_statistics.json` here once
+you've run this on your real image.)
 
-### Effect of Gaussian blur sigma
+### Effect of increasing the smoothing sigma
 
-(Discuss here how the image changes as sigma increases from 0.5 to 3.5 -
-e.g. at what point does the figure in the image become hard to make out,
-does higher sigma help or hurt the "is it an alien" investigation, etc.)
+(Your own discussion of what changes visually as sigma goes from 0.5 up to
+3.5, and what that means for trying to make out the figure in the photo.)
 
-### Edge detection comparison
+### Boundary detection comparison
 
-(Insert the 6 comparison plots from `data/part3_outputs/plots/` here, e.g.:)
+(Insert the 6 figures from `outputs/stage3/figures/` here, e.g.:)
 
 ```
-![comparison](data/part3_outputs/plots/example_comparison.png)
+![figure](outputs/stage3/figures/example__grid.png)
 ```
 
-Discuss the pros and cons of each technique (Sobel, Laplacian, Canny,
-Prewitt) and which one performed best for this specific image set, with
-reasoning tied to your actual results.
+Discuss the pros and cons of Sobel, Laplacian, Canny, and Prewitt for this
+specific image set, and state which one you found most useful and why,
+based on your actual results rather than general reputation.
 
-## Discussion
+## Additional discussion
 
-(Any additional observations, limitations, or notes on the process.)
+(Anything else worth noting about your process, limitations, or surprises.)
