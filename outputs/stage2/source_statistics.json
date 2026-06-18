@@ -1,0 +1,38 @@
+[
+  {
+    "channel": "Blue",
+    "minimum": 0,
+    "maximum": 255,
+    "average": 21.831687002471,
+    "median_value": 10.0,
+    "mode_value": 4.0,
+    "skewness": 1.6796471408588818,
+    "value_range": 255,
+    "std_deviation": 26.229604468480193,
+    "variance": 687.9921505729162
+  },
+  {
+    "channel": "Green",
+    "minimum": 0,
+    "maximum": 255,
+    "average": 24.640292543353457,
+    "median_value": 16.0,
+    "mode_value": 10.0,
+    "skewness": 1.7618090532862751,
+    "value_range": 255,
+    "std_deviation": 22.22529703598055,
+    "variance": 493.9638283375659
+  },
+  {
+    "channel": "Red",
+    "minimum": 0,
+    "maximum": 255,
+    "average": 20.60784912109375,
+    "median_value": 12.0,
+    "mode_value": 4.0,
+    "skewness": 2.1054486398247265,
+    "value_range": 255,
+    "std_deviation": 22.45564546558139,
+    "variance": 504.2560132758861
+  }
+]
