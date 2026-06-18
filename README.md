@@ -1,6 +1,6 @@
 # CS 898BA - Homework One
 
-**Author:** (your name)
+Sricharan Cherepally – C986X996
 
 ## What this project does
 
@@ -68,28 +68,38 @@ Produces `outputs/stage3/`:
 
 ## Results
 
-### Original image statistics
+### Original image statistics 
+| Channel | Min | Max | Average | Median | Mode | Skewness | Range | Std Dev | Variance | 
+|---|---|---|---|---|---|---|---|---|---| 
+| Blue | 0 | 255 | 21.83 | 10 | 4 | 1.68 | 255 | 26.23 | 687.99 | 
+| Green | 0 | 255 | 24.64 | 16 | 10 | 1.76 | 255 | 22.23 | 493.96 | 
+| Red | 0 | 255 | 20.61 | 12 | 4 | 2.11 | 255 | 22.46 | 504.26 | 
 
-(Paste the contents of `outputs/stage2/source_statistics.json` here once
-you've run this on your real image.)
+All three channels span the full 0-255 range but have averages and medians well below the midpoint (around 20-25 out of 255), with strongly positive skewness (1.68-2.11). This is consistent with a dark, low-light photo where most pixels are concentrated in the shadows, with a smaller number of much brighter pixels (highlights, lights, reflections) pulling the distribution's tail to the right. The Red channel is the most skewed and has the lowest average, while Green has the highest average of the three, suggesting the image's brighter regions lean slightly toward green/neutral tones rather than red. 
 
-### Effect of increasing the smoothing sigma
+### Effect of increasing the smoothing sigma 
 
-(Your own discussion of what changes visually as sigma goes from 0.5 up to
-3.5, and what that means for trying to make out the figure in the photo.)
+Looking across the sampled images at different sigma levels, the lower values (1.5-2.0) preserve enough structure that the person and background houses/cars remain clearly identifiable, with edges still sharp enough for Sobel, Prewitt, and even Canny to pick up real detail (see the sigma1p5 and sigma2p0 examples below, which look nearly identical to each other - at this range the extra half-step of blur barely changes what's detectable). By sigma 2.5, fine texture starts to disappear and edge detectors begin returning noticeably sparser results, particularly Canny. At sigma 3.5, the blurring is heavy enough that even Sobel and Prewitt only recover a rough silhouette rather than real detail, and Canny's output becomes almost entirely empty in several cases. Overall, sigma in this dataset acts as a fairly sharp cutoff for Canny's usefulness specifically - it degrades faster than the other three methods as blur increases. 
 
-### Boundary detection comparison
 
-(Insert the 6 figures from `outputs/stage3/figures/` here, e.g.:)
+### Edge detection comparison 
 
-```
-![figure](outputs/stage3/figures/example__grid.png)
-```
+![figure](outputs/stage3/figures/normalized_rgb__skewC__sigma1p5__grid.png)
 
-Discuss the pros and cons of Sobel, Laplacian, Canny, and Prewitt for this
-specific image set, and state which one you found most useful and why,
-based on your actual results rather than general reputation.
+![figure](outputs/stage3/figures/normalized_rgb__skewC__sigma2p0__grid.png)
 
-## Additional discussion
+![figure](outputs/stage3/figures/hls_space__skewB__sigma2p5__grid.png)
 
-(Anything else worth noting about your process, limitations, or surprises.)
+![figure](outputs/stage3/figures/bilevel__shA__sigma2p5__grid.png)
+
+![figure](outputs/stage3/figures/hsv_space__zoomDown1__sigma3p5__grid.png)
+
+![figure](outputs/stage3/figures/normalized_rgb__r230__sigma3p5__grid.png)
+
+Across these six examples, Sobel and Prewitt were consistently the most reliable. They produced clear, recognizable outlines of the person and background houses in every single case, including the heavily blurred and geometrically distorted versions (rotated, sheared, scaled down), and the two operators look almost identical to each other throughout, which makes sense given how similar their underlying gradient kernels are. 
+
+Laplacian performed noticeably worse on the more heavily preprocessed images. On the scaled-down (zoomDown1, sigma 3.5) and heavily rotated (r230, sigma 3.5) examples, its output is mostly fine-grained noise rather than a clean outline, since Laplacian's second-derivative calculation is inherently more sensitive to noise than a first-derivative method like Sobel. On the least-blurred examples (sigma 1.5-2.0), it still produced a usable but visibly dimmer and grainier result than Sobel or Prewitt. 
+
+Canny was the most inconsistent of the four. On the lightly blurred, contrast-normalized images (sigma 1.5 and 2.0), it actually performed quite well, returning clean and fairly complete edges for the person, houses, and cars. But on every more heavily processed example - the binarized image, the heavily blurred scaled-down image, and the heavily rotated image at sigma 3.5 - Canny's output collapsed to almost nothing, often just a faint fragment of the strongest edge (typically the image's own warp boundary) with the rest of the frame coming back completely black. This lines up with how Canny works: it depends on a clear gradient peak to cross its threshold, and once an image has been blurred and warped enough, that peak gets washed out faster than it does for the gradient-magnitude approach Sobel and Prewitt use. 
+
+Taking all of this together, Sobel (tied closely with Prewitt) was the most useful and consistent edge detector for this specific image set, precisely because this dataset includes so many heavily preprocessed variants (blurred, warped, binarized, rescaled). Canny's reputation as the "best" general-purpose edge detector did not hold up here - its strong performance was limited to the least-altered images, and it broke down the most under the kind of heavy preprocessing this assignment specifically generates.
