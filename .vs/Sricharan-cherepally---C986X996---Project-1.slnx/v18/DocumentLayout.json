@@ -3,8 +3,8 @@
   "WorkspaceRootPath": "C:\\Users\\chere\\OneDrive\\Documents\\GitHub\\Sricharan-cherepally---C986X996---Project-1\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\chere\\OneDrive\\Documents\\GitHub\\Sricharan-cherepally---C986X996---Project-1\\src\\part2_multichannel_norm.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\part2_multichannel_norm.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\chere\\OneDrive\\Documents\\GitHub\\Sricharan-cherepally---C986X996---Project-1\\src\\part3_threshold_segmentation.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\part3_threshold_segmentation.py||{8B382828-6202-11D1-8870-0000F87579D2}"
     }
   ],
   "DocumentGroupContainers": [
@@ -19,14 +19,14 @@
             {
               "$type": "Document",
               "DocumentIndex": 0,
-              "Title": "part2_multichannel_norm.py",
-              "DocumentMoniker": "C:\\Users\\chere\\OneDrive\\Documents\\GitHub\\Sricharan-cherepally---C986X996---Project-1\\src\\part2_multichannel_norm.py",
-              "RelativeDocumentMoniker": "src\\part2_multichannel_norm.py",
-              "ToolTip": "C:\\Users\\chere\\OneDrive\\Documents\\GitHub\\Sricharan-cherepally---C986X996---Project-1\\src\\part2_multichannel_norm.py",
-              "RelativeToolTip": "src\\part2_multichannel_norm.py",
-              "ViewState": "AgIAAFQAAAAAAAAAAAAAAFwAAABVAAAAAAAAAA==",
+              "Title": "part3_threshold_segmentation.py",
+              "DocumentMoniker": "C:\\Users\\chere\\OneDrive\\Documents\\GitHub\\Sricharan-cherepally---C986X996---Project-1\\src\\part3_threshold_segmentation.py",
+              "RelativeDocumentMoniker": "src\\part3_threshold_segmentation.py",
+              "ToolTip": "C:\\Users\\chere\\OneDrive\\Documents\\GitHub\\Sricharan-cherepally---C986X996---Project-1\\src\\part3_threshold_segmentation.py",
+              "RelativeToolTip": "src\\part3_threshold_segmentation.py",
+              "ViewState": "AgIAAEsAAAAAAAAAAAAAAFMAAAAaAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
-              "WhenOpened": "2026-06-30T01:58:20.673Z",
+              "WhenOpened": "2026-06-30T02:21:38.039Z",
               "EditorCaption": ""
             }
           ]
