@@ -55,3 +55,82 @@
 **Prompt:** Asked Claude to review the README for formatting issues and overall correctness.
 **Response Synopsis:** Identified a markdown table line-break issue, a text-encoding glitch in the author line, and image links that needed to be placed on separate lines, while confirming the rest of the content was accurate.
 **Changes Made:** Fixed the formatting issues in README.md.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##Homework-2
+
+## Entry 10
+
+**Date and Time:** 29th June – 6:00 PM
+**AI Tool:** Claude (Anthropic)
+**Prompt:** Asked Claude to review the Homework Two assignment README and break down the requirements into an actionable plan.
+**Response Synopsis:** Outlined the six required components: branch management, multi-channel color normalization, threshold-based segmentation, clustering-based segmentation, quantitative evaluation, and submission.
+**Changes Made:** Created `Feature-Segmentation` branch from the existing repository.
+
+## Entry 11
+
+**Date and Time:** 29th June – 6:30 PM
+**AI Tool:** Claude (Anthropic)
+**Prompt:** Asked Claude for guidance on selecting a color space for normalization and a method for choosing K in K-Means clustering.
+**Response Synopsis:** Recommended LAB color space for channel-wise histogram equalization, since it separates lightness from chrominance and is well suited to the unevenly lit source image, and recommended selecting K via silhouette score rather than visual judgment.
+**Changes Made:** Adopted LAB-based normalization and silhouette-driven K selection as the implementation approach for Parts 2 and 4.
+
+## Entry 12
+
+**Date and Time:** 29th June – 7:00 PM
+**AI Tool:** Claude (Anthropic)
+**Prompt:** Provided the existing Part 2 script from Homework One for reference and asked Claude to implement multi-channel normalization for Homework Two.
+**Response Synopsis:** Implemented `part2_multichannel_norm.py`, extending the manual histogram equalization routine from Homework One to operate independently on the L, A, and B channels before merging them back into a color image.
+**Changes Made:** Added `src/part2_multichannel_norm.py`; ran it on the Homework One source image, generating 8 output images in `outputs/stage2_segmentation/`.
+
+## Entry 13
+
+**Date and Time:** 29th June – 7:45 PM
+**AI Tool:** Claude (Anthropic)
+**Prompt:** Asked Claude to implement Otsu's global thresholding and adaptive thresholding for the normalized image.
+**Response Synopsis:** Implemented `part3_threshold_segmentation.py` using `cv2.threshold` with `THRESH_OTSU` and `cv2.adaptiveThreshold` with a Gaussian-weighted window, using the same block size and offset as the bilevel conversion in Homework One.
+**Changes Made:** Added `src/part3_threshold_segmentation.py`; generated binary masks and foreground extractions in `outputs/stage3_segmentation/`.
+
+
+## Entry 14
+
+**Date and Time:** 29th June – 8:15 PM
+**AI Tool:** Claude (Anthropic)
+**Prompt:** Asked Claude to implement K-Means clustering segmentation with a systematic method for selecting K.
+**Response Synopsis:** Implemented `part4_kmeans_segmentation.py`, performing K-Means clustering in HSV space across K=3 to 5 and selecting the optimal K using silhouette score on a pixel subsample, then identifying the foreground cluster using a distance-from-center heuristic.
+**Changes Made:** Added `src/part4_kmeans_segmentation.py`; K=3 was selected (silhouette score 0.5184); generated a cluster visualization and binary mask in `outputs/stage4_segmentation/`.
+
+## Entry 15
+
+**Date and Time:** 29th June – 8:45 PM
+**AI Tool:** Claude (Anthropic)
+**Prompt:** Provided a manually-traced ground truth mask of the figure and asked Claude to implement the evaluation script.
+**Response Synopsis:** Implemented `part5_evaluation.py` to compute Intersection over Union (IoU) and Dice coefficients for each of the three segmentation methods against the ground truth mask, and to assemble a six-panel side-by-side comparison figure.
+**Changes Made:** Added `src/part5_evaluation.py`; generated `metrics_summary.txt` and `comparison_grid.png` in `outputs/stage5_evaluation/`.
+
+## Entry 16
+
+**Date and Time:** 29th June – 9:00 PM
+**AI Tool:** Claude (Anthropic)
+**Prompt:** Asked Claude to draft a qualitative and quantitative analysis section for the README based on the actual IoU/Dice results and observed mask outputs.
+**Response Synopsis:** Drafted an analysis explaining why Otsu's and K-Means' results misclassified the figure against shadow and background regions, why adaptive thresholding scored comparatively higher, and how LAB-based normalization compared to Homework One's single-channel approach.
+**Changes Made:** Added a "Homework Two: Image Segmentation" section to `README.md`, including the results table and written analysis.
