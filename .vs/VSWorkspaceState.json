@@ -1,7 +1,8 @@
 {
   "ExpandedNodes": [
-    ""
+    "",
+    "\\src"
   ],
-  "SelectedNode": "\\requirements.txt",
+  "SelectedNode": "\\src\\part2_multichannel_norm.py",
   "PreviewInSolutionExplorer": false
 }
