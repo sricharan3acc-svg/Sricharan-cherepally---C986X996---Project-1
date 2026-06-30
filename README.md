@@ -103,3 +103,137 @@ Laplacian performed noticeably worse on the more heavily preprocessed images. On
 Canny was the most inconsistent of the four. On the lightly blurred, contrast-normalized images (sigma 1.5 and 2.0), it actually performed quite well, returning clean and fairly complete edges for the person, houses, and cars. But on every more heavily processed example - the binarized image, the heavily blurred scaled-down image, and the heavily rotated image at sigma 3.5 - Canny's output collapsed to almost nothing, often just a faint fragment of the strongest edge (typically the image's own warp boundary) with the rest of the frame coming back completely black. This lines up with how Canny works: it depends on a clear gradient peak to cross its threshold, and once an image has been blurred and warped enough, that peak gets washed out faster than it does for the gradient-magnitude approach Sobel and Prewitt use. 
 
 Taking all of this together, Sobel (tied closely with Prewitt) was the most useful and consistent edge detector for this specific image set, precisely because this dataset includes so many heavily preprocessed variants (blurred, warped, binarized, rescaled). Canny's reputation as the "best" general-purpose edge detector did not hold up here - its strong performance was limited to the least-altered images, and it broke down the most under the kind of heavy preprocessing this assignment specifically generates.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Homework Two: Image Segmentation
+
+### Multi-channel normalization
+
+Rather than equalizing a single channel as in Homework One (which normalized
+only the V channel of HSV), this assignment splits the source image into its
+LAB components and equalizes the L, A, and B channels independently before
+merging them back into a color image. LAB was chosen specifically because L
+isolates lightness from color, which matters for a doorbell-camera image
+shot under uneven, low-light conditions - equalizing L alone corrects
+brightness contrast, while independently equalizing A and B additionally
+recovers faint color-channel detail that a lightness-only pass would leave
+untouched.
+
+### Quantitative comparison (IoU / Dice against ground truth)
+
+| Method   | IoU    | Dice   |
+|----------|--------|--------|
+| Otsu     | 0.0368 | 0.0710 |
+| Adaptive | 0.0916 | 0.1678 |
+| K-Means  | 0.0230 | 0.0450 |
+
+All three methods score low against the manually-traced ground truth, which
+is itself a meaningful result given how dark and low-contrast the source
+image is - but the relative ordering is informative. Adaptive thresholding
+came out ahead of both Otsu and K-Means by a clear margin, which lines up
+with what the masks show visually.
+
+### Qualitative analysis
+
+**Otsu's global thresholding** performed the worst of the three. Otsu
+assumes the image splits cleanly into one bright group and one dark group,
+but in this image the figure and the surrounding shadowed lawn/background
+are both dark - so Otsu's single global cutoff lumped the person in with
+the background shadow instead of separating him out. The resulting
+foreground extraction kept the houses, sky, and lawn rather than the
+figure, which is the opposite of what was needed.
+
+**Adaptive thresholding** handled the same low-light conditions better
+because it recomputes a threshold locally for each neighborhood rather than
+using one global cutoff. This let it pick up on local contrast around the
+figure's outline even where the overall scene was dark. The tradeoff is
+noise: because adaptive thresholding reacts to small local intensity
+variations, the output is considerably grainier than Otsu's, with the
+sensor noise in the original low-light shot showing up as scattered
+speckling across the whole mask, especially in the lawn and sky regions.
+Even with that noise, it preserved more of the figure's actual silhouette
+than either of the other two methods, which is reflected in its higher
+IoU and Dice scores.
+
+**K-Means clustering** in HSV space, with K selected automatically via
+silhouette score, chose K=3 (silhouette score 0.5184, beating K=4 at 0.4827
+and K=5 at 0.5046). However, the resulting clusters grouped the figure's
+dark clothing together with the shadowed rooftops and architectural
+features in the background, rather than isolating the person as his own
+cluster - both share similar low-saturation, dark-value HSV characteristics
+under these lighting conditions. This produced the lowest IoU of the three
+methods, since the selected "figure" cluster mask captured house structure
+in addition to (and in places instead of) the person.
+
+**Effect of color normalization compared to Homework One's raw results:**
+Equalizing all three LAB channels independently visibly brightened and
+added contrast to the normalized image compared to the original, and
+compared to Homework One's single-channel (V-only) normalization, the
+LAB version preserves more separation between the figure and the
+background in terms of raw pixel values. However, this normalization alone
+was not enough to overcome the fundamental challenge for all three
+segmentation methods: the figure and the background shadow/architecture
+occupy a genuinely overlapping range of intensity and color values in this
+particular photo. This suggests that intensity- and color-based
+segmentation alone is insufficient for this image, and that a spatial or
+edge-aware refinement step (e.g. combining the boundary detection from
+Homework One with these masks, or adding a connected-component filter)
+would likely be necessary to cleanly isolate the figure in future work.
+
+### Comparison figure
+
+![Segmentation comparison grid](outputs/stage5_evaluation/comparison_grid.png)
