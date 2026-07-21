@@ -1,0 +1,98 @@
+[
+  {
+    "run": 5,
+    "learning_rate": 0.001,
+    "batch_size": 32,
+    "dropout_rate": 0.3,
+    "best_val_loss": 0.7041183866952595,
+    "best_val_acc": 0.7631578947368421
+  },
+  {
+    "run": 6,
+    "learning_rate": 0.001,
+    "batch_size": 32,
+    "dropout_rate": 0.5,
+    "best_val_loss": 0.7393405939403334,
+    "best_val_acc": 0.7697368421052632
+  },
+  {
+    "run": 8,
+    "learning_rate": 0.001,
+    "batch_size": 64,
+    "dropout_rate": 0.5,
+    "best_val_loss": 0.8192058864392733,
+    "best_val_acc": 0.7039473684210527
+  },
+  {
+    "run": 7,
+    "learning_rate": 0.001,
+    "batch_size": 64,
+    "dropout_rate": 0.3,
+    "best_val_loss": 0.8322197857655977,
+    "best_val_acc": 0.75
+  },
+  {
+    "run": 4,
+    "learning_rate": 0.01,
+    "batch_size": 64,
+    "dropout_rate": 0.5,
+    "best_val_loss": 0.9517632566000286,
+    "best_val_acc": 0.6513157894736842
+  },
+  {
+    "run": 9,
+    "learning_rate": 0.0001,
+    "batch_size": 32,
+    "dropout_rate": 0.3,
+    "best_val_loss": 0.9591758376673648,
+    "best_val_acc": 0.6710526315789473
+  },
+  {
+    "run": 10,
+    "learning_rate": 0.0001,
+    "batch_size": 32,
+    "dropout_rate": 0.5,
+    "best_val_loss": 0.9830938985473231,
+    "best_val_acc": 0.6644736842105263
+  },
+  {
+    "run": 3,
+    "learning_rate": 0.01,
+    "batch_size": 64,
+    "dropout_rate": 0.3,
+    "best_val_loss": 1.0116274921517623,
+    "best_val_acc": 0.6578947368421053
+  },
+  {
+    "run": 1,
+    "learning_rate": 0.01,
+    "batch_size": 32,
+    "dropout_rate": 0.3,
+    "best_val_loss": 1.0253308823234157,
+    "best_val_acc": 0.6776315789473685
+  },
+  {
+    "run": 11,
+    "learning_rate": 0.0001,
+    "batch_size": 64,
+    "dropout_rate": 0.3,
+    "best_val_loss": 1.0517312413767765,
+    "best_val_acc": 0.6513157894736842
+  },
+  {
+    "run": 12,
+    "learning_rate": 0.0001,
+    "batch_size": 64,
+    "dropout_rate": 0.5,
+    "best_val_loss": 1.0919474614293951,
+    "best_val_acc": 0.618421052631579
+  },
+  {
+    "run": 2,
+    "learning_rate": 0.01,
+    "batch_size": 32,
+    "dropout_rate": 0.5,
+    "best_val_loss": 1.1856833131689775,
+    "best_val_acc": 0.5592105263157895
+  }
+]

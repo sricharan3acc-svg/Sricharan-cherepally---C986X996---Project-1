@@ -237,3 +237,126 @@ would likely be necessary to cleanly isolate the figure in future work.
 ### Comparison figure
 
 ![Segmentation comparison grid](outputs/stage5_evaluation/comparison_grid.png)
+
+
+
+
+## Homework Three: Deep Learning for Fish Classification
+
+### Dataset
+
+The provided dataset contains 1,016 images across 6 fish species: Bete (194), Cray (80), Discuss (201), Gold (207), Guppy (189), and Oscar (145). All images are 800x600 RGB. There is a moderate class imbalance - Cray has less than half as many images as Gold - which is preserved proportionally across the train/val/test split via stratified sampling, and is worth keeping in mind when reading the per-class metrics below (Cray is the class most likely to be data-starved).
+
+### Pipeline
+
+Run in order:
+
+```
+python src/part2_data_pipeline.py
+python src/part3_baseline_cnn.py
+python src/part4_hyperparameter_tuning.py
+python src/part5_evaluation.py
+```
+
+`part2` builds a stratified 70/15/15 split (saved to `outputs/stage2_classification/dataset_split.csv` so every later script trains/evaluates on the exact same split), resizes all images to 128x128, and applies horizontal flip / rotation / brightness jitter augmentation to the training set only. A sanity-check grid comparing raw vs. augmented images is saved to confirm augmentation isn't distorting the fish or scrambling labels before it feeds into training.
+
+`part3` trains the baseline CNN (3 conv blocks: 32/64/128 filters, ReLU, MaxPool, followed by a 256-unit dense layer and dropout) with the assignment's specified starting hyperparameters (Adam, lr=0.001, batch size=32).
+
+`part4` runs a grid search over 3 learning rates x 2 batch sizes x 2 dropout rates (12 configurations total), each trained for a shorter epoch budget to rank them by validation loss, then retrains the winning configuration for the full epoch budget.
+
+`part5` evaluates both the baseline and optimized models on the held-out test set.
+
+### Results
+
+*(To be filled in after running the pipeline - grid search results, best hyperparameter configuration, classification report, and the comparison/confusion matrix figure below.)*
+
+**Grid search results:**
+
+| Learning Rate | Batch Size | Dropout | Best Val Loss | Best Val Acc |
+|---|---|---|---|---|
+| _pending_ | | | | |
+
+**Winning configuration:** _pending_
+
+**Baseline vs. optimized - test set metrics:**
+
+| Model | Accuracy | Precision | Recall | F1-Score |
+|---|---|---|---|---|
+| Baseline | | | | |
+| Optimized | | | | |
+
+### Qualitative Analysis
+
+*(To be filled in after running - discuss the effect of augmentation on training stability, which hyperparameter(s) had the largest effect on overfitting/convergence, and what the confusion matrix reveals about which species get confused with each other - e.g. whether visually similar species, or the underrepresented Cray class, drive most of the errors.)*
+
+### Comparison Figure
+
+![comparison grid](outputs/stage5_classification/comparison_grid.png)
+
+
+
+
+## Homework Three: Deep Learning for Fish Classification
+
+### Dataset
+
+The provided dataset contains 1,016 images across 6 fish species: Bete (194), Cray (80), Discuss (201), Gold (207), Guppy (189), and Oscar (145). All images are 800x600 RGB. There is a moderate class imbalance - Cray has less than half as many images as Gold - which is preserved proportionally across the train/val/test split via stratified sampling (711 train / 152 val / 153 test), and matters directly for the results below, since Cray is the smallest class by a wide margin.
+
+### Pipeline
+
+Run in order:
+
+python src/part2_data_pipeline.py
+python src/part3_baseline_cnn.py
+python src/part4_hyperparameter_tuning.py
+python src/part5_evaluation.py
+
+
+`part2` builds a stratified 70/15/15 split (saved to `outputs/stage2_classification/dataset_split.csv` so every later script trains/evaluates on the exact same split), resizes all images to 128x128, and applies horizontal flip / rotation / brightness jitter augmentation to the training set only. A sanity-check grid comparing raw vs. augmented images confirmed augmentation preserved species identity before it was trusted for training.
+
+`part3` trains the baseline CNN (3 conv blocks: 32/64/128 filters, ReLU, MaxPool, followed by a 256-unit dense layer and dropout=0.4) with the assignment's specified starting hyperparameters (Adam, lr=0.001, batch size=32), for 25 epochs.
+
+`part4` runs a grid search over 3 learning rates (0.01, 0.001, 0.0001) x 2 batch sizes (32, 64) x 2 dropout rates (0.3, 0.5) - 12 configurations, each trained for a 10-epoch search budget and ranked by validation loss - then retrains the winning configuration for the full 25-epoch budget.
+
+`part5` evaluates both the baseline and optimized models on the held-out test set.
+
+### Results
+
+**Grid search - winning configuration:**
+
+| Learning Rate | Batch Size | Dropout | Best Val Loss (10-epoch search) | Best Val Acc |
+|---|---|---|---|---|
+| 0.001 | 32 | 0.3 | 0.7041 | 0.7632 |
+
+**Baseline vs. optimized - test set metrics:**
+
+| Model | Accuracy | Macro Precision | Macro Recall | Macro F1 |
+|---|---|---|---|---|
+| Baseline | 0.88 | 0.85 | 0.86 | 0.85 |
+| Optimized | 0.82 | 0.81 | 0.78 | 0.78 |
+
+Per-class F1 (baseline / optimized):
+
+| Species | Baseline F1 | Optimized F1 |
+|---|---|---|
+| Bete | 0.91 | 0.84 |
+| Cray | 0.64 | 0.55 |
+| Discuss | 0.97 | 0.91 |
+| Gold | 0.90 | 0.85 |
+| Guppy | 0.92 | 0.89 |
+| Oscar | 0.76 | 0.67 |
+
+### Qualitative Analysis
+
+Contrary to what the assignment structure might suggest, hyperparameter tuning did not improve on the baseline here - the optimized model scored lower across every aggregate metric (accuracy 0.82 vs 0.88, macro F1 0.78 vs 0.85) and lower per-class F1 in every single species, with no exceptions. This is a meaningful result in its own right and is worth explaining rather than treating as a failed experiment.
+
+The winning grid search configuration (lr=0.001, batch_size=32, dropout=0.3) is nearly identical to the baseline's own hyperparameters (lr=0.001, batch_size=32, dropout=0.4) - the only real difference is a slightly lower dropout rate. Given how close the two configurations are, the gap in final test performance is more likely explained by training variance than by a genuine hyperparameter effect: the grid search ranked configurations using validation loss after only a 10-epoch search budget, but the winning config was then retrained for the full 25 epochs, and the loss/accuracy curves (see comparison figure) show validation loss for both the baseline and optimized model bottoming out early - around epoch 5-8 - before climbing back up while training loss keeps falling. That's classic overfitting, and it happens in both models to a similar degree; the optimized model's curve is not meaningfully more stable than the baseline's, despite dropout ostensibly regularizing against exactly this pattern. With a dataset this small (1,016 images total), the difference between hyperparameter configurations is easily within the noise introduced by which specific images land in the training batches and where training happens to be when overfitting sets in.
+
+The confusion matrix for the optimized model shows the errors are concentrated almost entirely in two classes: Cray and Oscar. Cray - the smallest class in the dataset at only 80 total images (56 for training) - was correctly classified in just 6 of 12 test images, with 5 of the 6 errors predicted as Guppy. Oscar fared similarly poorly, correct on only 12 of 22, with its errors spread across Bete, Gold, and Cray rather than concentrated on one confusable species. By contrast, Gold, Guppy, and Discuss - the three largest classes - were classified correctly in the vast majority of cases for both models. This pattern lines up directly with the class imbalance noted in the dataset section: species with fewer training examples produced measurably weaker per-class performance in both models, which is the expected outcome of a class-imbalanced dataset trained without any class-weighting or oversampling correction.
+
+Taken together, the results suggest two changes to try next rather than either the baseline or optimized configuration as-is: address the class imbalance directly (e.g. weighted loss or oversampling Cray), and use a validation-based early-stopping criterion during the final 25-epoch retrain, since both models' validation loss curves show overfitting setting in well before epoch 25 while the checkpoint-saving logic already correctly captures the best epoch regardless.
+
+### Comparison Figure
+
+![comparison grid](outputs/stage5_classification/comparison_grid.png)
+

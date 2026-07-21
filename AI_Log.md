@@ -134,3 +134,63 @@
 **Prompt:** Asked Claude to draft a qualitative and quantitative analysis section for the README based on the actual IoU/Dice results and observed mask outputs.
 **Response Synopsis:** Drafted an analysis explaining why Otsu's and K-Means' results misclassified the figure against shadow and background regions, why adaptive thresholding scored comparatively higher, and how LAB-based normalization compared to Homework One's single-channel approach.
 **Changes Made:** Added a "Homework Two: Image Segmentation" section to `README.md`, including the results table and written analysis.
+
+
+##Homework-3
+
+## Entry 17
+
+**Date and Time:** 19th July  9:00 PM
+**AI Tool:** Claude (Anthropic)
+**Prompt:** Asked Claude to review the Homework Three assignment README and break down the requirements into an actionable plan.
+**Response Synopsis:** Outlined the six required parts: branch/logging setup, data preprocessing and augmentation, a baseline CNN, hyperparameter tuning, evaluation, and submission. Also flagged that a prior review comment on Homework Two (K-Means/Otsu masks were inverted relative to the true foreground) should translate into explicit sanity checks throughout this assignment - specifically around class-index-to-species-name mapping and best-checkpoint selection.
+**Changes Made:** Created `Feature-Classification` branch from the existing repository, without modifying the `Feature-Segmentation` branch's code.
+
+## Entry 18
+
+**Date and Time:** 19th July  9:20 PM
+**AI Tool:** Claude (Anthropic)
+**Prompt:** Uploaded the Fish.7z dataset and asked Claude to confirm the class structure before writing any pipeline code.
+**Response Synopsis:** Extracted and inspected the archive - 1,016 images across 6 species folders (Bete, Cray, Discuss, Gold, Guppy, Oscar), all 800x600 RGB. Flagged a moderate class imbalance (Cray at 80 images vs. Gold at 207) as worth noting in the Part 5 analysis, and confirmed a 70/15/15 stratified split preserves per-class proportions across train/val/test.
+**Changes Made:** None yet - used to confirm dataset structure before implementation.
+
+## Entry 19
+
+**Date and Time:** 19th July  9:35 PM
+**AI Tool:** Claude (Anthropic)
+**Prompt:** Asked Claude for a framework and image-size recommendation given the dataset size, deferring the choice to Claude's judgment.
+**Response Synopsis:** Recommended PyTorch, 128x128 image size (224x224 judged likely to overfit further given only ~1,000 images total), and grid search over the required hyperparameters (learning rate, batch size, dropout) since the search space is only 12 configurations - small enough that grid search is fully tractable without needing random or Bayesian sampling.
+**Changes Made:** Adopted PyTorch / 128x128 / grid search as the implementation approach for Parts 2-4.
+
+## Entry 20
+
+**Date and Time:** 19th July  9:50 PM
+**AI Tool:** Claude (Anthropic)
+**Prompt:** Asked Claude to implement the data pipeline: stratified split, resize/normalize transforms, and training-set-only augmentation.
+**Response Synopsis:** Implemented `part2_data_pipeline.py` - a `collect_dataset` walk over the species folders, a two-step stratified `train_test_split` for 70/15/15, a saved `dataset_split.csv` so later scripts reuse the identical split, torchvision transform pipelines (train gets flip/rotation/brightness jitter, val/test only resize+normalize), a shared `FishDataset` class with a single alphabetically-ordered `class_to_idx` mapping, and a sanity-check image grid comparing raw vs. augmented samples before trusting the pipeline downstream.
+**Changes Made:** Added `src/part2_data_pipeline.py`. Verified `collect_dataset` and the stratified split against the actual extracted dataset (1,016 images, proportions preserved across splits) before moving on.
+
+## Entry 21
+
+**Date and Time:** 19th July  10:10 PM
+**AI Tool:** Claude (Anthropic)
+**Prompt:** Asked Claude to implement the baseline CNN architecture and training loop per the assignment spec (3 conv blocks, dense hidden layer, Adam/lr=0.001/batch=32).
+**Response Synopsis:** Implemented `part3_baseline_cnn.py` - a `FishCNN` class with 3 conv blocks (32/64/128 filters, ReLU, MaxPool) feeding a flatten, 256-unit dense layer, dropout, and a final linear layer to 6 classes. Training loop checkpoints weights only when validation loss improves (not the last epoch), and saves loss/accuracy curves.
+**Changes Made:** Added `src/part3_baseline_cnn.py`.
+
+## Entry 22
+
+**Date and Time:** 19th July  10:25 PM
+**AI Tool:** Claude (Anthropic)
+**Prompt:** Asked Claude to implement the Part 4 hyperparameter tuning step.
+**Response Synopsis:** Implemented `part4_hyperparameter_tuning.py` - grid search across 3 learning rates x 2 batch sizes x 2 dropout rates (12 configs), each trained for a reduced epoch budget to rank configs by validation loss, then the winning config gets retrained for the full epoch budget and saved as the optimized model. Added a printed gap check between the best and runner-up configs so a near-tie doesn't get over-interpreted as a real hyperparameter effect in the writeup.
+**Changes Made:** Added `src/part4_hyperparameter_tuning.py`.
+
+## Entry 23
+
+**Date and Time:** 19th July  10:40 PM
+**AI Tool:** Claude (Anthropic)
+**Prompt:** Asked Claude to implement the Part 5 evaluation and comparison script.
+**Response Synopsis:** Implemented `part5_evaluation.py` - loads both saved models, evaluates on the held-out test split, and explicitly passes an ordered `labels=`/`target_names=` list built from the same `class_to_idx` mapping used in training to sklearn's `classification_report` and `confusion_matrix`, rather than letting sklearn infer an order. Also added a 5-example spot-check printing true vs. predicted species side by side before trusting the aggregate metrics, directly following the sanity-check habit raised in the Homework Two review.
+**Changes Made:** Added `src/part5_evaluation.py`. Full pipeline written and syntax-verified; actual training/results to be generated after running locally with GPU/full compute.
+

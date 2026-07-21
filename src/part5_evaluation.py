@@ -1,156 +1,155 @@
 """
-CS 898BA - Homework 2 - Part 5
-Quantitative evaluation (IoU / Dice) of the three segmentation methods
-against a manually-traced ground truth mask, plus a side-by-side comparison
-figure for the README.
+CS 898BA - Homework Three, Part 5
+Evaluate baseline vs optimized models on the held-out test set.
 
-Usage:
-    python src/part5_evaluation.py --original data/input/HW1_IMG_CS898BA.png ^
-        --normalized outputs/stage2_segmentation/normalized_color.png ^
-        --otsu_mask outputs/stage3_segmentation/otsu_mask.png ^
-        --adaptive_mask outputs/stage3_segmentation/adaptive_mask.png ^
-        --kmeans_mask outputs/stage4_segmentation/kmeans_mask.png ^
-        --ground_truth outputs/stage4_segmentation/ground_truth_mask.png
+Produces:
+  - classification_report.txt (accuracy, precision, recall, f1 per class,
+    for both models)
+  - confusion_matrix.png (optimized model, test set)
+  - comparison_grid.png (loss/acc curves for both models + confusion matrix,
+    side by side, for the README)
 """
 
 import argparse
 import os
+import json
 
-import cv2
-import numpy as np
+import torch
+from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 
-OUT_ROOT = "outputs/stage5_evaluation"
-
-
-def make_dirs(*paths):
-    for p in paths:
-        os.makedirs(p, exist_ok=True)
-
-
-def load_binary_mask(path, target_shape):
-    """
-    Loads a mask image as a strict 0/255 binary array, resizing it to match
-    target_shape if its dimensions differ (e.g. if the ground truth was
-    exported at a slightly different size than the pipeline outputs).
-    """
-    raw = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-    if raw is None:
-        raise FileNotFoundError(f"Unable to read mask: {path}")
-
-    if raw.shape != target_shape:
-        raw = cv2.resize(raw, (target_shape[1], target_shape[0]), interpolation=cv2.INTER_NEAREST)
-
-    _, binary = cv2.threshold(raw, 127, 255, cv2.THRESH_BINARY)
-    return binary
+from part2_data_pipeline import collect_dataset, load_split_csv, get_transforms, FishDataset
+from part3_baseline_cnn import FishCNN, DEVICE
 
 
-def compute_iou(mask_a, mask_b):
-    """Intersection over Union / Jaccard index between two binary masks."""
-    a_bool = mask_a > 0
-    b_bool = mask_b > 0
-    intersection = np.logical_and(a_bool, b_bool).sum()
-    union = np.logical_or(a_bool, b_bool).sum()
-    if union == 0:
-        return 0.0
-    return intersection / union
-
-
-def compute_dice(mask_a, mask_b):
-    """Dice (Sorensen-Dice) coefficient between two binary masks."""
-    a_bool = mask_a > 0
-    b_bool = mask_b > 0
-    intersection = np.logical_and(a_bool, b_bool).sum()
-    total = a_bool.sum() + b_bool.sum()
-    if total == 0:
-        return 0.0
-    return (2.0 * intersection) / total
-
-
-def label_panel(img, text):
-    """Adds a small black label strip with white text under a panel image."""
-    h, w = img.shape[:2]
-    if len(img.shape) == 2:
-        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-    strip = np.zeros((40, w, 3), dtype=np.uint8)
-    cv2.putText(strip, text, (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-    return np.vstack([img, strip])
-
-
-def build_comparison_grid(panels_with_labels, out_path, panel_width=420):
-    """Resizes all panels to a common width and tiles them in a single row."""
-    resized = []
-    for img, label in panels_with_labels:
-        h, w = img.shape[:2]
-        scale = panel_width / w
-        resized_img = cv2.resize(img, (panel_width, int(h * scale)))
-        resized.append(label_panel(resized_img, label))
-
-    max_height = max(p.shape[0] for p in resized)
-    padded = []
-    for p in resized:
-        if p.shape[0] < max_height:
-            pad = np.zeros((max_height - p.shape[0], p.shape[1], 3), dtype=np.uint8)
-            p = np.vstack([p, pad])
-        padded.append(p)
-
-    grid = np.hstack(padded)
-    cv2.imwrite(out_path, grid)
-    return grid
+def get_predictions(model, loader):
+    model.eval()
+    all_preds, all_labels = [], []
+    with torch.no_grad():
+        for imgs, lbls in loader:
+            imgs = imgs.to(DEVICE)
+            outputs = model(imgs)
+            preds = outputs.argmax(dim=1).cpu().numpy()
+            all_preds.extend(preds)
+            all_labels.extend(lbls.numpy())
+    return all_labels, all_preds
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--original", required=True)
-    parser.add_argument("--normalized", required=True)
-    parser.add_argument("--otsu_mask", required=True)
-    parser.add_argument("--adaptive_mask", required=True)
-    parser.add_argument("--kmeans_mask", required=True)
-    parser.add_argument("--ground_truth", required=True)
+    parser.add_argument("--data-root", default="data/input/Fish")
+    parser.add_argument("--split-csv", default="outputs/stage2_classification/dataset_split.csv")
+    parser.add_argument("--baseline-weights", default="outputs/stage3_classification/baseline_model.pt")
+    parser.add_argument("--optimized-weights", default="outputs/stage4_classification/optimized_model.pt")
+    parser.add_argument("--optimized-config", default="outputs/stage4_classification/best_config.json")
+    parser.add_argument("--baseline-history", default="outputs/stage3_classification/baseline_history.json")
+    parser.add_argument("--optimized-history", default="outputs/stage4_classification/optimized_history.json")
+    parser.add_argument("--out-dir", default="outputs/stage5_classification")
     args = parser.parse_args()
 
-    make_dirs(OUT_ROOT)
+    os.makedirs(args.out_dir, exist_ok=True)
 
-    original = cv2.imread(args.original)
-    normalized = cv2.imread(args.normalized)
-    if original is None or normalized is None:
-        raise FileNotFoundError("Unable to read original or normalized image.")
+    _, _, species_names = collect_dataset(args.data_root)
+    class_to_idx = {name: i for i, name in enumerate(species_names)}
+    # explicit label order passed to sklearn everywhere below - this is the
+    # exact bug the HW2 review flagged: don't let a library infer an order
+    # and assume it lines up with what gets printed.
+    idx_to_class = {i: name for name, i in class_to_idx.items()}
+    ordered_class_names = [idx_to_class[i] for i in range(len(species_names))]
 
-    target_shape = normalized.shape[:2]
-    otsu_mask = load_binary_mask(args.otsu_mask, target_shape)
-    adaptive_mask = load_binary_mask(args.adaptive_mask, target_shape)
-    kmeans_mask = load_binary_mask(args.kmeans_mask, target_shape)
-    ground_truth = load_binary_mask(args.ground_truth, target_shape)
+    _, eval_tf = get_transforms()
+    test_paths, test_labels = load_split_csv(args.split_csv, "test")
+    test_ds = FishDataset(test_paths, test_labels, class_to_idx, eval_tf)
+    test_loader = DataLoader(test_ds, batch_size=32, shuffle=False, num_workers=2)
 
-    results = {}
-    for name, mask in [
-        ("Otsu", otsu_mask),
-        ("Adaptive", adaptive_mask),
-        ("K-Means", kmeans_mask),
-    ]:
-        iou = compute_iou(mask, ground_truth)
-        dice = compute_dice(mask, ground_truth)
-        results[name] = {"iou": iou, "dice": dice}
-        print(f"{name:10s} | IoU: {iou:.4f} | Dice: {dice:.4f}")
+    with open(args.optimized_config) as f:
+        best_config = json.load(f)
 
-    metrics_path = os.path.join(OUT_ROOT, "metrics_summary.txt")
-    with open(metrics_path, "w") as f:
-        f.write("Method     | IoU    | Dice\n")
-        f.write("-----------|--------|-------\n")
-        for name, vals in results.items():
-            f.write(f"{name:10s} | {vals['iou']:.4f} | {vals['dice']:.4f}\n")
-    print(f"Metrics written to {metrics_path}")
+    baseline_model = FishCNN(num_classes=len(species_names)).to(DEVICE)
+    baseline_model.load_state_dict(torch.load(args.baseline_weights, map_location=DEVICE))
 
-    panels = [
-        (original, "Original"),
-        (normalized, "LAB Normalized"),
-        (otsu_mask, "Otsu"),
-        (adaptive_mask, "Adaptive"),
-        (kmeans_mask, "K-Means"),
-        (ground_truth, "Ground Truth"),
-    ]
-    grid_path = os.path.join(OUT_ROOT, "comparison_grid.png")
-    build_comparison_grid(panels, grid_path)
-    print(f"Comparison grid written to {grid_path}")
+    optimized_model = FishCNN(num_classes=len(species_names),
+                               dropout_rate=best_config["dropout_rate"]).to(DEVICE)
+    optimized_model.load_state_dict(torch.load(args.optimized_weights, map_location=DEVICE))
+
+    baseline_labels, baseline_preds = get_predictions(baseline_model, test_loader)
+    optimized_labels, optimized_preds = get_predictions(optimized_model, test_loader)
+
+    baseline_report = classification_report(
+        baseline_labels, baseline_preds,
+        labels=list(range(len(species_names))), target_names=ordered_class_names,
+    )
+    optimized_report = classification_report(
+        optimized_labels, optimized_preds,
+        labels=list(range(len(species_names))), target_names=ordered_class_names,
+    )
+
+    with open(os.path.join(args.out_dir, "classification_report.txt"), "w") as f:
+        f.write("=== Baseline model - test set ===\n")
+        f.write(baseline_report)
+        f.write("\n\n=== Optimized model - test set ===\n")
+        f.write(optimized_report)
+        f.write(f"\n\nWinning hyperparameter config: {best_config}\n")
+
+    print(baseline_report)
+    print(optimized_report)
+
+    # quick sanity spot-check: print 5 individual predictions next to their
+    # true labels before trusting the aggregate numbers above
+    print("\nSpot-check - 5 optimized-model predictions vs ground truth:")
+    for i in range(min(5, len(optimized_labels))):
+        true_name = ordered_class_names[optimized_labels[i]]
+        pred_name = ordered_class_names[optimized_preds[i]]
+        flag = "" if true_name == pred_name else "  <-- MISS"
+        print(f"  true={true_name:10s} pred={pred_name:10s}{flag}")
+
+    cm = confusion_matrix(optimized_labels, optimized_preds, labels=list(range(len(species_names))))
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=ordered_class_names)
+
+    fig_cm, ax_cm = plt.subplots(figsize=(7, 6))
+    disp.plot(ax=ax_cm, xticks_rotation=45, cmap="Blues", colorbar=False)
+    ax_cm.set_title("Optimized model - confusion matrix (test set)")
+    plt.tight_layout()
+    plt.savefig(os.path.join(args.out_dir, "confusion_matrix.png"), dpi=120)
+    plt.close(fig_cm)
+
+    with open(args.baseline_history) as f:
+        baseline_history = json.load(f)
+    with open(args.optimized_history) as f:
+        optimized_history = json.load(f)
+
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+
+    axes[0, 0].plot(baseline_history["train_loss"], label="train")
+    axes[0, 0].plot(baseline_history["val_loss"], label="val")
+    axes[0, 0].set_title("Baseline - Loss")
+    axes[0, 0].legend()
+
+    axes[0, 1].plot(baseline_history["train_acc"], label="train")
+    axes[0, 1].plot(baseline_history["val_acc"], label="val")
+    axes[0, 1].set_title("Baseline - Accuracy")
+    axes[0, 1].legend()
+
+    axes[1, 0].plot(optimized_history["train_loss"], label="train")
+    axes[1, 0].plot(optimized_history["val_loss"], label="val")
+    axes[1, 0].set_title("Optimized - Loss")
+    axes[1, 0].legend()
+
+    axes[1, 1].plot(optimized_history["train_acc"], label="train")
+    axes[1, 1].plot(optimized_history["val_acc"], label="val")
+    axes[1, 1].set_title("Optimized - Accuracy")
+    axes[1, 1].legend()
+
+    disp.plot(ax=axes[0, 2], xticks_rotation=45, cmap="Blues", colorbar=False)
+    axes[0, 2].set_title("Optimized - Confusion Matrix")
+    axes[1, 2].axis("off")
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(args.out_dir, "comparison_grid.png"), dpi=120)
+    plt.close(fig)
+
+    print(f"\nAll outputs saved to {args.out_dir}/")
 
 
 if __name__ == "__main__":
