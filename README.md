@@ -241,59 +241,6 @@ would likely be necessary to cleanly isolate the figure in future work.
 
 
 
-## Homework Three: Deep Learning for Fish Classification
-
-### Dataset
-
-The provided dataset contains 1,016 images across 6 fish species: Bete (194), Cray (80), Discuss (201), Gold (207), Guppy (189), and Oscar (145). All images are 800x600 RGB. There is a moderate class imbalance - Cray has less than half as many images as Gold - which is preserved proportionally across the train/val/test split via stratified sampling, and is worth keeping in mind when reading the per-class metrics below (Cray is the class most likely to be data-starved).
-
-### Pipeline
-
-Run in order:
-
-```
-python src/part2_data_pipeline.py
-python src/part3_baseline_cnn.py
-python src/part4_hyperparameter_tuning.py
-python src/part5_evaluation.py
-```
-
-`part2` builds a stratified 70/15/15 split (saved to `outputs/stage2_classification/dataset_split.csv` so every later script trains/evaluates on the exact same split), resizes all images to 128x128, and applies horizontal flip / rotation / brightness jitter augmentation to the training set only. A sanity-check grid comparing raw vs. augmented images is saved to confirm augmentation isn't distorting the fish or scrambling labels before it feeds into training.
-
-`part3` trains the baseline CNN (3 conv blocks: 32/64/128 filters, ReLU, MaxPool, followed by a 256-unit dense layer and dropout) with the assignment's specified starting hyperparameters (Adam, lr=0.001, batch size=32).
-
-`part4` runs a grid search over 3 learning rates x 2 batch sizes x 2 dropout rates (12 configurations total), each trained for a shorter epoch budget to rank them by validation loss, then retrains the winning configuration for the full epoch budget.
-
-`part5` evaluates both the baseline and optimized models on the held-out test set.
-
-### Results
-
-*(To be filled in after running the pipeline - grid search results, best hyperparameter configuration, classification report, and the comparison/confusion matrix figure below.)*
-
-**Grid search results:**
-
-| Learning Rate | Batch Size | Dropout | Best Val Loss | Best Val Acc |
-|---|---|---|---|---|
-| _pending_ | | | | |
-
-**Winning configuration:** _pending_
-
-**Baseline vs. optimized - test set metrics:**
-
-| Model | Accuracy | Precision | Recall | F1-Score |
-|---|---|---|---|---|
-| Baseline | | | | |
-| Optimized | | | | |
-
-### Qualitative Analysis
-
-*(To be filled in after running - discuss the effect of augmentation on training stability, which hyperparameter(s) had the largest effect on overfitting/convergence, and what the confusion matrix reveals about which species get confused with each other - e.g. whether visually similar species, or the underrepresented Cray class, drive most of the errors.)*
-
-### Comparison Figure
-
-![comparison grid](outputs/stage5_classification/comparison_grid.png)
-
-
 
 
 ## Homework Three: Deep Learning for Fish Classification
